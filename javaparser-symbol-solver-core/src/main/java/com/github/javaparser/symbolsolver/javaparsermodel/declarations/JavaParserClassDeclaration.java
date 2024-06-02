@@ -44,6 +44,7 @@ import com.github.javaparser.symbolsolver.core.resolution.MethodUsageResolutionC
 import com.github.javaparser.symbolsolver.core.resolution.SymbolResolutionCapability;
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
+import com.github.javaparser.symbolsolver.javaparsermodel.contexts.ClassOrInterfaceDeclarationContext;
 import com.github.javaparser.symbolsolver.logic.AbstractClassDeclaration;
 import com.github.javaparser.symbolsolver.resolution.SymbolSolver;
 
@@ -335,6 +336,20 @@ public class JavaParserClassDeclaration extends AbstractClassDeclaration
     }
 
     @Override
+    public SymbolReference<? extends ResolvedValueDeclaration> solvePublicStaticField(String name, TypeSolver typeSolver) {
+        Context context = getContext();
+        if (context instanceof ClassOrInterfaceDeclarationContext) {
+            SymbolReference<? extends ResolvedValueDeclaration> reference = ((ClassOrInterfaceDeclarationContext) context).solveSymbolInClass(name);
+            if (reference.getDeclaration().isPresent() &&
+                    ResolvedValueDeclaration.IsPublicStaticMember(reference.getDeclaration().get())) {
+                return reference;
+            }
+        }
+
+        return SymbolReference.unsolved();
+    }
+
+    @Override
     public List<ResolvedReferenceType> getAncestors(boolean acceptIncompleteList) {
         List<ResolvedReferenceType> ancestors = new ArrayList<>();
 
@@ -466,6 +481,9 @@ public class JavaParserClassDeclaration extends AbstractClassDeclaration
             className = classOrInterfaceType.getScope().get().toString() + "." + className;
         }
 
+        // Since this is used to resolve reference to "extended" and "implemented" types, and since these type references
+        // should not be resolved against member types of the current type, we resolve based on the context containing
+        // the class declaration.
         SymbolReference<ResolvedTypeDeclaration> ref = getContext().getParent()
                 .orElseThrow(() -> new RuntimeException("Parent context unexpectedly empty."))
                 .solveType(className);
